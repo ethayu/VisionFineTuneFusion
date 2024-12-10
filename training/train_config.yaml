@@ -1,0 +1,16 @@
+dino_model_name: "facebook/dino-v2-large"
+clip_model_name: "openai/clip-vit-base-patch32"
+data_dir: "data/processed"
+save_path: "results/checkpoints/autoencoder.pth"
+device: "cuda"  # or "cpu"
+
+batch_size: 32
+epochs: 10
+learning_rate: 0.0001
+scheduler_step: 5
+scheduler_gamma: 0.5
+
+latent_dim: 768
+lambda_reconstruction: 1.0
+lambda_clip_image: 0.5
+lambda_clip_text: 0.5
