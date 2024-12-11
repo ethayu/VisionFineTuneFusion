@@ -26,3 +26,20 @@ class Autoencoder(nn.Module):
         z = self.encoder(x)
         x_reconstructed = self.decoder(z)
         return x_reconstructed, z
+
+class PatchAutoencoder(torch.nn.Module):
+    def __init__(self, input_dim, latent_dim):
+        super(PatchAutoencoder, self).__init__()
+        self.encoder = torch.nn.Sequential(
+            torch.nn.Linear(input_dim, latent_dim),
+            torch.nn.ReLU()
+        )
+        self.decoder = torch.nn.Sequential(
+            torch.nn.Linear(latent_dim, input_dim),
+            torch.nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        latent = self.encoder(x)
+        reconstructed = self.decoder(latent)
+        return reconstructed, latent

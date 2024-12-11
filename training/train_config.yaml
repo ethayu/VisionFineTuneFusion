@@ -10,7 +10,13 @@ learning_rate: 0.0001
 scheduler_step: 5
 scheduler_gamma: 0.5
 
-latent_dim: 768
+latent_dim: 512 # needs to be same as CLIP latent dim
+cls_dim: 1024
 lambda_reconstruction: 1.0
 lambda_clip_image: 0.5
 lambda_clip_text: 0.5
+
+patch_dim: 768
+latent_dim_patch: 256
+lambda_patch_reconstruction: 0.5
+lambda_patch_clip: 1.0

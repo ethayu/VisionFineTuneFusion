@@ -27,3 +27,20 @@ def extract_cls_token(model, images):
     """
     outputs = model(images)
     return outputs.last_hidden_state[:, 0, :]  # CLS token
+
+def extract_cls_and_patches(dino_model, images):
+    """
+    Extract CLS and patch tokens from the DiNO model.
+
+    Args:
+        dino_model (torch.nn.Module): Loaded DiNO model.
+        images (torch.Tensor): Batch of images.
+
+    Returns:
+        torch.Tensor: CLS tokens for the batch of images.
+        torch.Tensor: Patch embeddings for the batch of images.
+    """
+    outputs = dino_model(images)  # Assuming this returns token embeddings
+    cls_token = outputs[:, 0, :]  # CLS token
+    patch_tokens = outputs[:, 1:, :]  # Patch embeddings
+    return cls_token, patch_tokens

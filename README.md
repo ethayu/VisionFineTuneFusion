@@ -1,9 +1,16 @@
-# Vision Baselines: Harmonizing Vision Models with Instance Retrieval and Depth Estimation
+# VisionFineTuneFusion: Unifying Vision Models for Retrieval and Depth Estimation
 
-This project aims to explore the performance of foundational vision models like **DiNO** and **DiNO + Autoencoder** on downstream tasks such as **instance retrieval** and **depth estimation**. The goal is to establish baselines for these tasks while providing modular scripts for easy experimentation.
+This project focuses on integrating DINO's structural embeddings with CLIP's semantic insights to enhance various vision tasks. The approach includes:
 
----
+- **Instance Retrieval**: Using DINO's class token (CLS) and patch embeddings, finetuned with CLIP's image-text embeddings through cosine similarity loss, to align structural and semantic information.
 
+- **Depth Estimation**: Training both a CLS-based and a patch-based autoencoder to predict depth maps, utilizing global features from CLS and localized details from patches.
+
+- **Segmentation**: Leveraging DINO's patch embeddings for pixel-level segmentation tasks, improving spatial resolution and feature precision.
+
+- **Zero-Shot Learning**: Employing CLIP's image and text embeddings to enable classification and task generalization beyond the training data.
+
+This project investigates a training pipeline that combines DINO's hierarchical representations with CLIP's multimodal semantics. The framework emphasizes alignment between structural precision and semantic contextualization, bridging gaps between self-supervised learning and multimodal applications.
 ## Tasks
 
 1. **Instance Retrieval**:

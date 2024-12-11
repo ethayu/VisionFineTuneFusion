@@ -10,15 +10,6 @@ from PIL import Image
 
 class DepthDataset(Dataset):
     def __init__(self, image_dir, depth_dir, transform=None, target_transform=None):
-        """
-        Depth Estimation Dataset.
-
-        Args:
-            image_dir (str): Directory containing RGB images.
-            depth_dir (str): Directory containing depth maps.
-            transform (callable, optional): Transformation for images.
-            target_transform (callable, optional): Transformation for depth maps.
-        """
         self.image_dir = image_dir
         self.depth_dir = depth_dir
         self.image_filenames = sorted(os.listdir(image_dir))
@@ -44,18 +35,14 @@ class DepthDataset(Dataset):
         return image, depth
 
 
-def train_depth_model(data_loader, model, epochs, device, lr=0.0001, checkpoint_path="depth_estimation/checkpoints/model.pth"):
-    """
-    Train the depth estimation model.
-
-    Args:
-        data_loader (DataLoader): DataLoader for the depth dataset.
-        model (DepthEstimationModel): Depth estimation model.
-        epochs (int): Number of epochs.
-        device (str): Device to train on ("cuda" or "cpu").
-        lr (float): Learning rate.
-        checkpoint_path (str): Path to save the model checkpoint.
-    """
+def train_depth_model(
+    data_loader,
+    model,
+    epochs,
+    device,
+    lr=0.0001,
+    checkpoint_path="depth_estimation/checkpoints/model.pth"
+):
     model.to(device)
     optimizer = optim.AdamW(model.parameters(), lr=lr)
     criterion = nn.MSELoss()
@@ -78,7 +65,6 @@ def train_depth_model(data_loader, model, epochs, device, lr=0.0001, checkpoint_
         avg_loss = running_loss / len(data_loader)
         print(f"Epoch {epoch+1}, Loss: {avg_loss:.4f}")
 
-    # Save model
     torch.save(model.state_dict(), checkpoint_path)
     print(f"Model saved to {checkpoint_path}")
 
@@ -102,5 +88,11 @@ if __name__ == "__main__":
 
     data_loader = DataLoader(dataset, batch_size=8, shuffle=True)
 
-    model = DepthEstimationModel(model_type="dino", device="cuda")
+    model = DepthEstimationModel(
+        model_type="custom_patch",
+        dino_model_name="facebook/dino-v2-large",
+        patch_autoencoder_path="checkpoints/patch_autoencoder.pth",
+        device="cuda"
+    )
+
     train_depth_model(data_loader, model, epochs=10, device="cuda")
