@@ -36,12 +36,14 @@ env/
 # Project specific
 data/
 results/
-*.npz
-*.idx
 logs/
 checkpoints/
 *.pth
 *.ckpt
+
+# Instance retrieval specific
+instance_retrieval/*.npz
+instance_retrieval/*.idx
 
 # Jupyter Notebook
 .ipynb_checkpoints
