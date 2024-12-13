@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
-def cosine_similarity_metric(vector1, vector2):
+def compute_cosine_similarity(vector1, vector2):
     """
     Compute cosine similarity between two vectors.
     

@@ -132,11 +132,11 @@ Run the `metrics.py` functions to compute retrieval metrics:
 
 Example script to evaluate:
 ```bash
-python query_index.py
---evaluate
---query_indices [0, 1, 2]
---top_k 5
-```
+python3 instance_retrieval/metrics.py \
+  --index_file instance_retrieval/faiss_index.idx \
+  --features_file instance_retrieval/features.npz \
+  --top_k 5 \
+  --num_queries 3
 
 ---
 

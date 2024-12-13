@@ -8,6 +8,28 @@ from pathlib import Path
 from typing import List, Tuple
 import logging
 
+import os
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = str(Path(__file__).parent.parent)
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+# Standard library imports
+import torch
+import numpy as np
+from torchvision import transforms
+from PIL import Image
+from tqdm import tqdm
+
+# Project imports
+from models import load_dino_model, Autoencoder  # Import from models/__init__.py
+from utils import load_checkpoint, compute_cosine_similarity  # Import from utils/__init__.py
+
+
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -94,7 +116,7 @@ def query_index(
     index_file: str,
     top_k: int = 5,
     model_type: str = "dino",
-    dino_model_name: str = "facebook/dino-v2-large",
+    dino_model_name: str = "facebook/dinov2-large",
     autoencoder_path: str = None,
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
 ) -> List[Tuple[str, float]]:

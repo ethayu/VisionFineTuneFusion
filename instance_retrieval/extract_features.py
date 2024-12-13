@@ -1,16 +1,29 @@
 import os
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = str(Path(__file__).parent.parent)
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+# Standard library imports
 import torch
 import numpy as np
 from torchvision import transforms
 from PIL import Image
-from tqdm import tqdm  # Added for progress tracking
-from pathlib import Path  # Added for better path handling
+from tqdm import tqdm
+
+# Project imports
+from models import load_dino_model, Autoencoder  # Import from models/__init__.py
+from utils import load_checkpoint, compute_cosine_similarity  # Import from utils/__init__.py
+
 
 def extract_features(
     image_dir,
     output_file,
     model_type="dino",
-    dino_model_name="facebook/dino-v2-large",
+    dino_model_name="facebook/dinov2-large",
     autoencoder_path=None,
     device="cuda" if torch.cuda.is_available() else "cpu",
     batch_size=32  # Added batch processing
