@@ -20,11 +20,7 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
-venv/
-ENV/
-env/
-.env
+
 
 # IDE
 .idea/
@@ -55,3 +51,9 @@ instance_retrieval/*.idx
 # Data files
 data/
 data/*
+
+myenv/
+myenv/*
+
+venv/
+venv/*
