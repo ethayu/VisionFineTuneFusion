@@ -135,8 +135,10 @@ Example script to evaluate:
 python3 instance_retrieval/metrics.py \
   --index_file instance_retrieval/faiss_index.idx \
   --features_file instance_retrieval/features.npz \
-  --top_k 5 \
-  --num_queries 3
+  --top_k 100 \
+  --num_queries 50 \
+  --similarity_threshold 0.8 \
+  --output_file results/evaluation_results.json
 
 ---
 

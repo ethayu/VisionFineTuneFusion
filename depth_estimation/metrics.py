@@ -3,6 +3,25 @@ import numpy as np
 from typing import Dict, Union, Tuple
 import logging
 
+import os
+import sys
+from pathlib import Path
+# Add project root to Python path
+project_root = str(Path(__file__).parent.parent)
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+# Standard library imports
+import torch
+import numpy as np
+from torchvision import transforms
+from PIL import Image
+from tqdm import tqdm
+
+# Project imports
+from models import load_dino_model, Autoencoder  # Import from models/__init__.py
+from utils import load_checkpoint, compute_cosine_similarity  # Import from utils/__init__.py
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 

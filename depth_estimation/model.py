@@ -1,30 +1,35 @@
 import torch
 import torch.nn as nn
-from models.dino_model import load_dino_model
-from models.autoencoder import Autoencoder, PatchAutoencoder
 import logging
 from typing import Optional
+import os
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = str(Path(__file__).parent.parent)
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+# Standard library imports
+import torch
+import numpy as np
+from torchvision import transforms
+from PIL import Image
+from tqdm import tqdm
+
+# Project imports
+from models import load_dino_model, Autoencoder  # Import from models/__init__.py
+from utils import load_checkpoint, compute_cosine_similarity  # Import from utils/__init__.py
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class DepthEstimationModel(nn.Module):
-    """
-    Depth estimation model using DiNO features.
-    
-    Attributes:
-        dino: DiNO model for feature extraction
-        cls_autoencoder: Optional autoencoder for CLS token features
-        patch_autoencoder: Optional autoencoder for patch features
-        model_type: Type of model ("dino", "custom_cls", or "custom_patch")
-        cls_head: Regression head for CLS token features
-        patch_head: Regression head for patch features
-    """
-    
     def __init__(
         self,
         model_type: str = "dino",
-        dino_model_name: str = "facebook/dino-v2-large",
+        dino_model_name: str = "facebook/dinov2-large",
         cls_autoencoder_path: Optional[str] = None,
         patch_autoencoder_path: Optional[str] = None,
         device: str = "cuda"
@@ -34,11 +39,9 @@ class DepthEstimationModel(nn.Module):
         if model_type not in ["dino", "custom_cls", "custom_patch"]:
             raise ValueError(f"Unsupported model type: {model_type}")
         
-        # Load DiNO model
         logger.info(f"Loading DiNO model: {dino_model_name}")
         self.dino = load_dino_model(dino_model_name).to(device)
         
-        # Initialize autoencoders if needed
         self.cls_autoencoder = None
         self.patch_autoencoder = None
         
@@ -46,51 +49,69 @@ class DepthEstimationModel(nn.Module):
             if cls_autoencoder_path and model_type == "custom_cls":
                 logger.info("Loading CLS autoencoder")
                 self.cls_autoencoder = Autoencoder(input_dim=1024, latent_dim=512).to(device)
-                try:
-                    self.cls_autoencoder.load_state_dict(
-                        torch.load(cls_autoencoder_path, map_location=device)
-                    )
-                    self.cls_autoencoder.eval()
-                except Exception as e:
-                    raise RuntimeError(f"Failed to load CLS autoencoder: {e}")
+                self.cls_autoencoder.load_state_dict(torch.load(cls_autoencoder_path, map_location=device))
+                self.cls_autoencoder.eval()
             
             if patch_autoencoder_path and model_type == "custom_patch":
                 logger.info("Loading Patch autoencoder")
-                self.patch_autoencoder = PatchAutoencoder(input_dim=768, latent_dim=256).to(device)
-                try:
-                    self.patch_autoencoder.load_state_dict(
-                        torch.load(patch_autoencoder_path, map_location=device)
-                    )
-                    self.patch_autoencoder.eval()
-                except Exception as e:
-                    raise RuntimeError(f"Failed to load Patch autoencoder: {e}")
+                self.patch_autoencoder = PatchAutoencoder(input_dim=1024, latent_dim=256).to(device)
+                self.patch_autoencoder.load_state_dict(torch.load(patch_autoencoder_path, map_location=device))
+                self.patch_autoencoder.eval()
         
         self.model_type = model_type
-        
-        # Initialize regression heads
         self._init_regression_heads()
     
     def _init_regression_heads(self):
-        """Initialize the regression heads with proper weight initialization."""
-        self.cls_head = nn.Sequential(
-            nn.Conv2d(1024, 512, kernel_size=3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.Conv2d(512, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.Conv2d(256, 1, kernel_size=3, padding=1)
-        )
+        # Calculate the required number of upsampling stages
+        self.num_upsamples = 4  # To go from 14x14 to 224x224
         
-        self.patch_head = nn.Sequential(
-            nn.Conv2d(768, 384, kernel_size=3, padding=1),
-            nn.BatchNorm2d(384),
+        # Modified cls_head with dynamic upsampling
+        cls_layers = []
+        current_channels = 1024
+        
+        for i in range(self.num_upsamples):
+            out_channels = current_channels // 2 if i < self.num_upsamples - 1 else 64
+            cls_layers.extend([
+                nn.Conv2d(current_channels, out_channels, kernel_size=3, padding=1),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(),
+                nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+            ])
+            current_channels = out_channels
+        
+        # Final layers
+        cls_layers.extend([
+            nn.Conv2d(64, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
             nn.ReLU(),
-            nn.Conv2d(384, 192, kernel_size=3, padding=1),
-            nn.BatchNorm2d(192),
+            nn.Conv2d(32, 1, kernel_size=3, padding=1)
+        ])
+        
+        self.cls_head = nn.Sequential(*cls_layers)
+        
+        # Modified patch_head with dynamic upsampling
+        patch_layers = []
+        current_channels = 1024
+        
+        for i in range(self.num_upsamples):
+            out_channels = current_channels // 2 if i < self.num_upsamples - 1 else 64
+            patch_layers.extend([
+                nn.Conv2d(current_channels, out_channels, kernel_size=3, padding=1),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(),
+                nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+            ])
+            current_channels = out_channels
+        
+        # Final layers
+        patch_layers.extend([
+            nn.Conv2d(64, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
             nn.ReLU(),
-            nn.Conv2d(192, 1, kernel_size=3, padding=1)
-        )
+            nn.Conv2d(32, 1, kernel_size=3, padding=1)
+        ])
+        
+        self.patch_head = nn.Sequential(*patch_layers)
         
         # Initialize weights
         for m in self.modules():
@@ -102,43 +123,33 @@ class DepthEstimationModel(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
     
-    def extract_features(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Extract features from the input using DiNO."""
-        if self.training:
+    def extract_features(self, x: torch.Tensor):
+        with torch.no_grad():
             dino_outputs = self.dino(x)
-        else:
-            with torch.no_grad():
-                dino_outputs = self.dino(x)
         
-        cls_features = dino_outputs.last_hidden_state[:, 0, :]
-        patch_features = dino_outputs.last_hidden_state[:, 1:, :]
+        cls_features = dino_outputs.last_hidden_state[:, 0, :]  # [B, 1024]
+        patch_features = dino_outputs.last_hidden_state[:, 1:, :]  # [B, N, 1024]
         
         return cls_features, patch_features
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass for depth estimation.
-        
-        Args:
-            x: Input image tensor of shape (B, C, H, W)
-            
-        Returns:
-            Predicted depth map of shape (B, 1, H, W)
-            
-        Raises:
-            ValueError: If model_type is not supported
-        """
         cls_features, patch_features = self.extract_features(x)
         
         if self.model_type == "custom_cls":
             if self.cls_autoencoder:
                 _, cls_features = self.cls_autoencoder(cls_features)
             
-            # Reshape for convolutional head
             B = cls_features.size(0)
             cls_features = cls_features.view(B, -1, 1, 1)
-            cls_features = cls_features.expand(-1, -1, x.size(2)//16, x.size(3)//16)
-            return self.cls_head(cls_features)
+            cls_features = cls_features.expand(-1, -1, 14, 14)  # Match DINO patch size
+            out = self.cls_head(cls_features)
+            
+            # Ensure output size matches target size
+            if out.size(-1) != 224 or out.size(-2) != 224:
+                out = nn.functional.interpolate(
+                    out, size=(224, 224), mode='bilinear', align_corners=True
+                )
+            return out
         
         elif self.model_type == "custom_patch" or self.model_type == "dino":
             if self.patch_autoencoder and self.model_type == "custom_patch":
@@ -148,12 +159,18 @@ class DepthEstimationModel(nn.Module):
                     patch_reconstructed.append(latent_patch)
                 patch_features = torch.stack(patch_reconstructed, dim=1)
             
-            # Reshape patches to spatial dimensions
             B, N, C = patch_features.shape
-            H = W = int(np.sqrt(N))
+            H = W = int(N ** 0.5)
             patch_features = patch_features.transpose(1, 2).view(B, C, H, W)
             
-            return self.patch_head(patch_features)
+            out = self.patch_head(patch_features)
+            
+            # Ensure output size matches target size
+            if out.size(-1) != 224 or out.size(-2) != 224:
+                out = nn.functional.interpolate(
+                    out, size=(224, 224), mode='bilinear', align_corners=True
+                )
+            return out
         
         else:
             raise ValueError(f"Unsupported model type: {self.model_type}")

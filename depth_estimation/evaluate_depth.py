@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from depth_estimation.model import DepthEstimationModel
-from depth_estimation.train_depth import DepthDataset
-from depth_estimation.metrics import evaluate_depth_metrics, log_metrics
+from model import DepthEstimationModel
+from train_depth import DepthDataset
+from  metrics import evaluate_depth_metrics, log_metrics
 from torchvision import transforms
 import numpy as np
 from pathlib import Path
@@ -11,6 +11,25 @@ import logging
 from typing import Optional, Dict, List
 import json
 from tqdm import tqdm
+import os
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = str(Path(__file__).parent.parent)
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+# Standard library imports
+import torch
+import numpy as np
+from torchvision import transforms
+from PIL import Image
+from tqdm import tqdm
+
+# Project imports
+from models import load_dino_model, Autoencoder  # Import from models/__init__.py
+from utils import load_checkpoint, compute_cosine_similarity  # Import from utils/__init__.py
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,7 +37,7 @@ logger = logging.getLogger(__name__)
 def load_model(
     checkpoint_path: str,
     model_type: str = "custom_patch",
-    dino_model_name: str = "facebook/dino-v2-large",
+    dino_model_name: str = "facebook/dinov2-large",
     cls_autoencoder_path: Optional[str] = None,
     patch_autoencoder_path: Optional[str] = None,
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
@@ -136,10 +155,9 @@ if __name__ == "__main__":
     dataset = DepthDataset(
         image_dir=args.image_dir,
         depth_dir=args.depth_dir,
-        transform=transform,
-        target_transform=target_transform
+        transform=transform
     )
-    
+        
     data_loader = DataLoader(
         dataset,
         batch_size=args.batch_size,
