@@ -37,6 +37,8 @@ checkpoints/
 
 *.ckpt
 
+depth_estimation/predictions/*.npy
+
 # Instance retrieval specific
 instance_retrieval/*.npz
 instance_retrieval/*.idx
@@ -52,8 +54,6 @@ instance_retrieval/*.idx
 data/
 data/*
 
-depth_estimation/predictions/
-depth_estimation/predictions/*
 
 myenv/
 myenv/*
