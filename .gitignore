@@ -52,6 +52,8 @@ instance_retrieval/*.idx
 data/
 data/*
 
+depth_estimation/predictions/
+depth_estimation/predictions/*
 
 myenv/
 myenv/*
