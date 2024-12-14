@@ -71,10 +71,10 @@ python train_depth.py
 
 Example:
 ```bash
-python train_depth.py
---image_dir data/depth/images
---depth_dir data/depth/depth_maps
---model_type dino
+python3 depth_estimation/train_depth.py \
+    --image_dir data/depth/images \
+    --depth_dir data/depth/depth_maps \
+    --model_type dino
 ```
 
 ---
@@ -94,10 +94,12 @@ python evaluate_depth.py
 
 Example:
 ```bash
-python evaluate_depth.py
---image_dir data/depth/images
---depth_dir data/depth/depth_maps
---model_checkpoint depth_estimation/checkpoints/model.pth
+python3 depth_estimation/evaluate_depth.py \
+    --image_dir data/depth/images \
+    --depth_dir data/depth/depth_maps \
+    --checkpoint_path depth_estimation/checkpoints/best_model.pth \
+    --save_predictions \
+    --results_file evaluation_results.json
 ```
 ---
 
