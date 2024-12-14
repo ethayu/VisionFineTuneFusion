@@ -69,6 +69,8 @@ python extract_features.py
 - `model_type`: `"dino"` for baseline DiNO or `"custom"` for DiNO + Autoencoder.
 - `autoencoder_path`: Path to trained autoencoder weights (only for `"custom"` model type).
 
+
+
 Example:
 ```bash
 python extract_features.py
@@ -76,6 +78,8 @@ python extract_features.py
 --output_file instance_retrieval/features.npz
 --model_type dino
 ```
+
+python3 instance_retrieval/extract_features.py --image_dir data/flowers/images --output_file instance_retrieval/features.npz --model_type dino
 
 ---
 
@@ -95,6 +99,8 @@ Example:
 python build_index.py
 --features_file instance_retrieval/features.npz
 --index_file instance_retrieval/faiss_index.idx
+
+python3 instance_retrieval/build_index.py --features_file instance_retrieval/features.npz --index_file instance_retrieval/faiss_index.idx
 ```
 
 ---
@@ -116,11 +122,17 @@ python query_idnex.py
 Example:
 ```bash
 python query_index.py
---query_image_path data/flowers/images/image_0001.jpg
+--query_image_path data/flowers/images/image_00001.jpg
 --features_file instance_retrieval/features.npz
 --index_file instance_retrieval/faiss_index.idx
 --model_type dino
 ```
+
+python3 instance_retrieval/query_index.py \
+  --query_image data/flowers/images/image_00002.jpg \
+  --features_file instance_retrieval/features.npz \
+  --index_file instance_retrieval/faiss_index.idx \
+  --model_type dino
 
 ---
 
