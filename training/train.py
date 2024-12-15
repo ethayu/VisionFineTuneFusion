@@ -44,9 +44,9 @@ def train(config):
 
     # Load dataset
     train_loader = get_data_loader(
-        "data/coco/val2017", 
+        "data/coco/train2017", 
         batch_size=config["batch_size"], 
-        annotation_file="data/coco/annotations/captions_val2017.json"
+        annotation_file="data/coco/annotations/captions_train2017.json"
     )
 
     # Optimizer and scheduler

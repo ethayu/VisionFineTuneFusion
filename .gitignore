@@ -30,7 +30,7 @@ wheels/
 .DS_Store
 
 # Project specific
-data/
+# data/
 results/
 logs/
 checkpoints/
