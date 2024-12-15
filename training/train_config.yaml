@@ -1,8 +1,9 @@
-dino_model_name: "facebook/dino-v2-large"
+dino_model_name: "facebook/dinov2-large"
 clip_model_name: "openai/clip-vit-base-patch32"
 data_dir: "data/processed"
 save_path: "results/checkpoints/autoencoder.pth"
-device: "cuda"  # or "cpu"
+# device: "cuda"  # or "cpu"
+device: "cpu"
 
 batch_size: 32
 epochs: 10
@@ -16,7 +17,10 @@ lambda_reconstruction: 1.0
 lambda_clip_image: 0.5
 lambda_clip_text: 0.5
 
-patch_dim: 768
-latent_dim_patch: 256
+patch_dim: 1024
+# changed patch dim from 768
+latent_dim_patch: 512
 lambda_patch_reconstruction: 0.5
 lambda_patch_clip: 1.0
+lambda_cls_reconstruction: 1.0
+lambda_cls_clip: 0.5

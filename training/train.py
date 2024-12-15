@@ -2,11 +2,25 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from models.autoencoder import Autoencoder, PatchAutoencoder
-from models.dino_model import load_dino_model, extract_cls_and_patches
-from models.clip_model import load_clip_model, get_clip_embeddings
+from models.dino import load_dino_model, extract_cls_and_patches
+from models.clip import load_clip_model, get_clip_embeddings
 from models.losses import reconstruction_loss, clip_loss
 from data.dataset_loader import get_data_loader
 import yaml
+from tqdm import tqdm
+import torch.nn.functional as F
+
+def prepare_patch_for_clip(patch, target_size=(224, 224)):
+    # Assuming patch is of shape (batch_size, 1024)
+    # Step 1: Reshape the patch to (batch_size, 32, 32) or any other reasonable 2D shape
+    patch_image = patch.view(patch.size(0), 32, 32)  # Example reshaping into 32x32
+    # Step 2: Expand dimensions to include the 3 color channels (RGB)
+    patch_image = patch_image.unsqueeze(1).repeat(1, 3, 1, 1)  # Now shape is (batch_size, 3, 32, 32)
+    
+    # Step 3: Upsample to 224x224 for CLIP input
+    # patch_image = F.interpolate(patch_image, size=target_size, mode="bilinear", align_corners=False)
+    patch_image = torch.sigmoid(patch_image) 
+    return patch_image
 
 def train(config):
     # Load models
@@ -19,7 +33,9 @@ def train(config):
     autoencoder_patch = PatchAutoencoder(input_dim=config["patch_dim"], latent_dim=config["latent_dim_patch"]).to(config["device"])
 
     # Load dataset
-    train_loader = get_data_loader(config["data_dir"], batch_size=config["batch_size"])
+    # train_loader = get_data_loader(config["data_dir"], batch_size=config["batch_size"], annotation_file="data/coco/annotations/captions_train2017.json")
+
+    train_loader = get_data_loader("data/coco/val2017", batch_size=config["batch_size"], annotation_file="data/coco/annotations/captions_val2017.json")
 
     # Optimizer and scheduler
     optimizer = optim.AdamW(
@@ -34,13 +50,13 @@ def train(config):
         autoencoder_patch.train()
         total_loss = 0
 
-        for images, texts in train_loader:
+        for images, text in tqdm(train_loader):
             images = images.to(config["device"])
 
             # Extract CLS and patch tokens
             with torch.no_grad():
                 cls_tokens, patch_tokens = extract_cls_and_patches(dino, images)
-
+        
             # Pass CLS tokens through CLS autoencoder
             cls_reconstructed, cls_latent = autoencoder_cls(cls_tokens)
 
@@ -54,13 +70,25 @@ def train(config):
 
             # Compute CLIP embeddings
             patch_image_embeds = []
-            for patch in patch_tokens.unbind(dim=1):
-                patch_image = patch.view_as(images)  # Reshape each patch if needed
-                patch_image_embeds.append(get_clip_embeddings(clip, processor, patch_image, None)[0])
+            for patch in tqdm(patch_tokens.unbind(dim=1)[:8]):
+                # print(f'Patch tokens shape {patch_tokens.shape}, {images.shape}')
+                patch_image = prepare_patch_for_clip(patch)
+                patch_image_embeds.append(get_clip_embeddings(clip, processor, patch_image, text)[0])
+                # print(patch.shape)
+                # patch_image_embeds.append(get_clip_embeddings(clip, processor, patch, None)[0])
+            patch_image_embeds =patch_image_embeds * 32
+
 
             # Compute losses for CLS
             cls_rec_loss = reconstruction_loss(cls_tokens, cls_reconstructed)
-            cls_clip_loss = clip_loss(cls_latent, image_embeds)
+
+            # print(f'CLS Latent: {cls_latent.shape}, patch_image_embeds: {patch_image_embeds[0].shape}')
+
+            cls_clip_loss = clip_loss(cls_latent, patch_image_embeds[0])
+
+            # print(f'Cls Clip loss {cls_clip_loss}')
+
+            # print(f'Patch Latent List 0 shape {patch_latent_list[0].shape}, Patch image embeds 0 shape {patch_image_embeds[0].shape}')
 
             # Compute losses for patches
             patch_rec_loss = sum(
@@ -99,5 +127,6 @@ def train(config):
 if __name__ == "__main__":
     with open("training/train_config.yaml", "r") as f:
         config = yaml.safe_load(f)
+    print('config loaded...')
 
     train(config)

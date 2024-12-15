@@ -51,8 +51,8 @@ instance_retrieval/*.idx
 *.log
 
 # Data files
-data/
-data/*
+data/coco/*
+# data/*
 
 
 myenv/
