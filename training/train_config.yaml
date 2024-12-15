@@ -5,7 +5,7 @@ save_path: "results/checkpoints/autoencoder.pth"
 # device: "cuda"  # or "cpu"
 device: "cpu"
 
-batch_size: 2
+batch_size: 32
 epochs: 10
 learning_rate: 0.0001
 scheduler_step: 5
