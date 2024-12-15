@@ -29,8 +29,11 @@ def get_clip_embeddings(model, processor, images, texts):
     Returns:
         torch.Tensor, torch.Tensor: Image embeddings, text embeddings.
     """
-
-
-    inputs = processor(text=texts, images=images, return_tensors="pt", padding=True)
-    outputs = model(**inputs)
-    return outputs.image_embeds, outputs.text_embeds
+    if texts:
+        inputs = processor(text=texts, images=images, return_tensors="pt", padding=True)
+        outputs = model(**inputs)
+        return outputs.image_embeds, outputs.text_embeds
+    else:
+        inputs = processor(images=images, return_tensors="pt", padding=True)
+        outputs = model.vision_model(**inputs)
+        return outputs.last_hidden_state
