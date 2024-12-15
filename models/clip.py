@@ -16,7 +16,7 @@ def load_clip_model(model_name="openai/clip-vit-base-patch32"):
     processor = CLIPProcessor.from_pretrained(model_name)
     return model, processor
 
-def get_clip_embeddings(model, processor, images, texts):
+def get_clip_embeddings(model, processor, images, texts, device = "cpu"):
     """
     Get image and text embeddings from the CLIP model.
 
@@ -29,11 +29,14 @@ def get_clip_embeddings(model, processor, images, texts):
     Returns:
         torch.Tensor, torch.Tensor: Image embeddings, text embeddings.
     """
+    processor.image_processor.do_rescale = False
     if texts:
-        inputs = processor(text=texts, images=images, return_tensors="pt", padding=True)
+        inputs = processor(text=texts, images=images, return_tensors="pt", padding=True).to(device)
         outputs = model(**inputs)
+        del inputs
         return outputs.image_embeds, outputs.text_embeds
     else:
-        inputs = processor(images=images, return_tensors="pt", padding=True)
+        inputs = processor(images=images, return_tensors="pt", padding=True).to(device)
         outputs = model.vision_model(**inputs)
+        del inputs
         return outputs.last_hidden_state
