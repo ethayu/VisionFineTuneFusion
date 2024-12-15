@@ -10,13 +10,11 @@ import yaml
 from tqdm import tqdm
 import torch.nn.functional as F
 
+
 def prepare_patch_for_clip(patch, target_size=(224, 224)):
-    # Assuming patch is of shape (batch_size, 1024)
-    # Step 1: Reshape the patch to (batch_size, 32, 32) or any other reasonable 2D shape
     patch_image = patch.view(patch.size(0), 32, 32)  # Example reshaping into 32x32
     # Step 2: Expand dimensions to include the 3 color channels (RGB)
-    patch_image = patch_image.unsqueeze(1).repeat(1, 3, 1, 1)  # Now shape is (batch_size, 3, 32, 32)
-    
+    patch_image = patch_image.unsqueeze(1).repeat(1, 3, 1, 1)  
     # Step 3: Upsample to 224x224 for CLIP input
     # patch_image = F.interpolate(patch_image, size=target_size, mode="bilinear", align_corners=False)
     patch_image = torch.sigmoid(patch_image) 
@@ -67,28 +65,27 @@ def train(config):
                 reconstructed, latent = autoencoder_patch(patch)
                 patch_reconstructed_list.append(reconstructed)
                 patch_latent_list.append(latent)
-
+        
             # Compute CLIP embeddings
             patch_image_embeds = []
-            for patch in tqdm(patch_tokens.unbind(dim=1)[:8]):
+            for patch in tqdm(patch_tokens.unbind(dim=1)[:4]):
                 # print(f'Patch tokens shape {patch_tokens.shape}, {images.shape}')
                 patch_image = prepare_patch_for_clip(patch)
                 patch_image_embeds.append(get_clip_embeddings(clip, processor, patch_image, text)[0])
                 # print(patch.shape)
                 # patch_image_embeds.append(get_clip_embeddings(clip, processor, patch, None)[0])
-            patch_image_embeds =patch_image_embeds * 32
 
+            patch_image_embeds *= 64
 
             # Compute losses for CLS
             cls_rec_loss = reconstruction_loss(cls_tokens, cls_reconstructed)
 
-            # print(f'CLS Latent: {cls_latent.shape}, patch_image_embeds: {patch_image_embeds[0].shape}')
+            clip_image_embedding, clip_text_embedding = get_clip_embeddings(clip, processor, images,text)
+            cls_clip_loss = clip_loss(cls_latent, clip_image_embedding)
 
-            cls_clip_loss = clip_loss(cls_latent, patch_image_embeds[0])
+            # Maybe add this guy in?
 
-            # print(f'Cls Clip loss {cls_clip_loss}')
-
-            # print(f'Patch Latent List 0 shape {patch_latent_list[0].shape}, Patch image embeds 0 shape {patch_image_embeds[0].shape}')
+            # cls_clip_text_loss = clip_loss(cls_latent, clip_text_embedding)
 
             # Compute losses for patches
             patch_rec_loss = sum(
