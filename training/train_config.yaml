@@ -5,7 +5,7 @@ save_path: "results/checkpoints/autoencoder.pth"
 # device: "cuda"  # or "cpu"
 device: "cpu"
 
-batch_size: 32
+batch_size: 8
 epochs: 10
 learning_rate: 0.0001
 scheduler_step: 5
@@ -25,3 +25,6 @@ lambda_patch_clip: 1.0
 lambda_cls_reconstruction: 1.0
 lambda_cls_clip: 0.5
 num_patches: 256
+
+save_path_cls: cls_model
+save_path_patch: patch_model

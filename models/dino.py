@@ -45,7 +45,7 @@ def extract_cls_and_patches(model, images):
     """
     outputs = model(images, output_hidden_states=True)
     last_hidden_state = outputs.last_hidden_state
-    print(f'Dino last hidden state: {last_hidden_state.shape}')
+    # print(f'Dino last hidden state: {last_hidden_state.shape}')
     cls_token = last_hidden_state[:, 0, :]  # CLS token
     patch_tokens = last_hidden_state[:, 1:, :]  # Patch embeddings
     return cls_token, patch_tokens
