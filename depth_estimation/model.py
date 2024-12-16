@@ -19,11 +19,13 @@ from PIL import Image
 from tqdm import tqdm
 
 # Project imports
-from models import load_dino_model, Autoencoder  # Import from models/__init__.py
+from models import load_dino_model, CLSAutoencoder, PatchAutoencoder  # Import from models/__init__.py
 from utils import load_checkpoint, compute_cosine_similarity  # Import from utils/__init__.py
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
 
 class DepthEstimationModel(nn.Module):
     def __init__(
@@ -48,70 +50,80 @@ class DepthEstimationModel(nn.Module):
         if model_type in ["custom_cls", "custom_patch"]:
             if cls_autoencoder_path and model_type == "custom_cls":
                 logger.info("Loading CLS autoencoder")
-                self.cls_autoencoder = Autoencoder(input_dim=1024, latent_dim=512).to(device)
-                self.cls_autoencoder.load_state_dict(torch.load(cls_autoencoder_path, map_location=device))
+                self.cls_autoencoder = CLSAutoencoder(
+                    input_dim=1024,
+                    latent_dim=512
+                ).to(device)
+                state_dict = torch.load(cls_autoencoder_path, map_location=device)
+                if isinstance(state_dict, dict) and 'model_state_dict' in state_dict:
+                    state_dict = state_dict['model_state_dict']
+                self.cls_autoencoder.load_state_dict(state_dict)
                 self.cls_autoencoder.eval()
             
             if patch_autoencoder_path and model_type == "custom_patch":
                 logger.info("Loading Patch autoencoder")
-                self.patch_autoencoder = PatchAutoencoder(input_dim=1024, latent_dim=256).to(device)
-                self.patch_autoencoder.load_state_dict(torch.load(patch_autoencoder_path, map_location=device))
+                self.patch_autoencoder = PatchAutoencoder(
+                    input_dim=1024,
+                    latent_dim=512
+                ).to(device)
+                state_dict = torch.load(patch_autoencoder_path, map_location=device)
+                if isinstance(state_dict, dict) and 'model_state_dict' in state_dict:
+                    state_dict = state_dict['model_state_dict']
+                self.patch_autoencoder.load_state_dict(state_dict)
                 self.patch_autoencoder.eval()
         
         self.model_type = model_type
         self._init_regression_heads()
     
     def _init_regression_heads(self):
-        # Calculate the required number of upsampling stages
         self.num_upsamples = 4  # To go from 14x14 to 224x224
         
-        # Modified cls_head with dynamic upsampling
-        cls_layers = []
-        current_channels = 1024
-        
-        for i in range(self.num_upsamples):
-            out_channels = current_channels // 2 if i < self.num_upsamples - 1 else 64
+        # Initialize both heads with appropriate input channels
+        if self.model_type in ["custom_cls", "dino"]:
+            cls_layers = []
+            current_channels = 1024 if self.model_type == "dino" else 512
+            
+            for i in range(self.num_upsamples):
+                out_channels = current_channels // 2 if i < self.num_upsamples - 1 else 64
+                cls_layers.extend([
+                    nn.Conv2d(current_channels, out_channels, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(out_channels),
+                    nn.ReLU(),
+                    nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+                ])
+                current_channels = out_channels
+            
             cls_layers.extend([
-                nn.Conv2d(current_channels, out_channels, kernel_size=3, padding=1),
-                nn.BatchNorm2d(out_channels),
+                nn.Conv2d(64, 32, kernel_size=3, padding=1),
+                nn.BatchNorm2d(32),
                 nn.ReLU(),
-                nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+                nn.Conv2d(32, 1, kernel_size=3, padding=1)
             ])
-            current_channels = out_channels
+            
+            self.cls_head = nn.Sequential(*cls_layers)
         
-        # Final layers
-        cls_layers.extend([
-            nn.Conv2d(64, 32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Conv2d(32, 1, kernel_size=3, padding=1)
-        ])
-        
-        self.cls_head = nn.Sequential(*cls_layers)
-        
-        # Modified patch_head with dynamic upsampling
-        patch_layers = []
-        current_channels = 1024
-        
-        for i in range(self.num_upsamples):
-            out_channels = current_channels // 2 if i < self.num_upsamples - 1 else 64
+        if self.model_type in ["custom_patch", "dino"]:
+            patch_layers = []
+            current_channels = 1024 if self.model_type == "dino" else 512
+            
+            for i in range(self.num_upsamples):
+                out_channels = current_channels // 2 if i < self.num_upsamples - 1 else 64
+                patch_layers.extend([
+                    nn.Conv2d(current_channels, out_channels, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(out_channels),
+                    nn.ReLU(),
+                    nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+                ])
+                current_channels = out_channels
+            
             patch_layers.extend([
-                nn.Conv2d(current_channels, out_channels, kernel_size=3, padding=1),
-                nn.BatchNorm2d(out_channels),
+                nn.Conv2d(64, 32, kernel_size=3, padding=1),
+                nn.BatchNorm2d(32),
                 nn.ReLU(),
-                nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+                nn.Conv2d(32, 1, kernel_size=3, padding=1)
             ])
-            current_channels = out_channels
-        
-        # Final layers
-        patch_layers.extend([
-            nn.Conv2d(64, 32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Conv2d(32, 1, kernel_size=3, padding=1)
-        ])
-        
-        self.patch_head = nn.Sequential(*patch_layers)
+            
+            self.patch_head = nn.Sequential(*patch_layers)
         
         # Initialize weights
         for m in self.modules():
@@ -141,18 +153,11 @@ class DepthEstimationModel(nn.Module):
             
             B = cls_features.size(0)
             cls_features = cls_features.view(B, -1, 1, 1)
-            cls_features = cls_features.expand(-1, -1, 14, 14)  # Match DINO patch size
+            cls_features = cls_features.expand(-1, -1, 14, 14)
             out = self.cls_head(cls_features)
             
-            # Ensure output size matches target size
-            if out.size(-1) != 224 or out.size(-2) != 224:
-                out = nn.functional.interpolate(
-                    out, size=(224, 224), mode='bilinear', align_corners=True
-                )
-            return out
-        
-        elif self.model_type == "custom_patch" or self.model_type == "dino":
-            if self.patch_autoencoder and self.model_type == "custom_patch":
+        elif self.model_type == "custom_patch":
+            if self.patch_autoencoder:
                 patch_reconstructed = []
                 for patch in patch_features.unbind(dim=1):
                     _, latent_patch = self.patch_autoencoder(patch)
@@ -162,15 +167,14 @@ class DepthEstimationModel(nn.Module):
             B, N, C = patch_features.shape
             H = W = int(N ** 0.5)
             patch_features = patch_features.transpose(1, 2).view(B, C, H, W)
-            
             out = self.patch_head(patch_features)
             
-            # Ensure output size matches target size
-            if out.size(-1) != 224 or out.size(-2) != 224:
-                out = nn.functional.interpolate(
-                    out, size=(224, 224), mode='bilinear', align_corners=True
-                )
-            return out
-        
         else:
             raise ValueError(f"Unsupported model type: {self.model_type}")
+        
+        # Ensure output size matches target size
+        if out.size(-1) != 224 or out.size(-2) != 224:
+            out = nn.functional.interpolate(
+                out, size=(224, 224), mode='bilinear', align_corners=True
+            )
+        return out
