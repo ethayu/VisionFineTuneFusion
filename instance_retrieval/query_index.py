@@ -25,10 +25,8 @@ from PIL import Image
 from tqdm import tqdm
 
 # Project imports
-from models import load_dino_model, Autoencoder  # Import from models/__init__.py
-from utils import load_checkpoint, compute_cosine_similarity  # Import from utils/__init__.py
-
-
+from models import load_dino_model, CLSAutoencoder, PatchAutoencoder
+from utils import load_checkpoint, compute_cosine_similarity
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,35 +34,52 @@ logger = logging.getLogger(__name__)
 def load_models(
     model_type: str,
     dino_model_name: str,
-    autoencoder_path: str = None,
+    cls_autoencoder_path: str = None,
+    patch_autoencoder_path: str = None,
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-) -> Tuple[torch.nn.Module, torch.nn.Module]:
+) -> Tuple[torch.nn.Module, torch.nn.Module, torch.nn.Module]:
     """
     Load the required models based on model type.
     
     Args:
-        model_type: Type of model to use ("dino" or "custom")
+        model_type: Type of model to use ("dino", "custom_cls", or "custom_patch")
         dino_model_name: Name of the DINO model to load
-        autoencoder_path: Path to autoencoder checkpoint
+        cls_autoencoder_path: Path to CLS autoencoder checkpoint
+        patch_autoencoder_path: Path to patch autoencoder checkpoint
         device: Device to load models on
         
     Returns:
-        Tuple of (dino_model, autoencoder)
+        Tuple of (dino_model, cls_autoencoder, patch_autoencoder)
     """
     logger.info(f"Loading DINO model: {dino_model_name}")
     dino = load_dino_model(dino_model_name).to(device).eval()
 
-    if model_type == "custom":
-        if not autoencoder_path or not os.path.exists(autoencoder_path):
-            raise ValueError("Valid autoencoder path must be provided for custom model")
-        logger.info(f"Loading autoencoder from: {autoencoder_path}")
-        autoencoder = Autoencoder(input_dim=1024, latent_dim=768).to(device)
-        load_checkpoint(autoencoder, autoencoder_path, device)
-        autoencoder.eval()
-    else:
-        autoencoder = None
+    cls_autoencoder = None
+    patch_autoencoder = None
 
-    return dino, autoencoder
+    if model_type == "custom_cls":
+        if not cls_autoencoder_path or not os.path.exists(cls_autoencoder_path):
+            raise ValueError("Valid CLS autoencoder path must be provided for custom_cls model")
+        logger.info(f"Loading CLS autoencoder from: {cls_autoencoder_path}")
+        cls_autoencoder = CLSAutoencoder(input_dim=1024, latent_dim=512).to(device)
+        state_dict = torch.load(cls_autoencoder_path, map_location=device)
+        if isinstance(state_dict, dict) and 'model_state_dict' in state_dict:
+            state_dict = state_dict['model_state_dict']
+        cls_autoencoder.load_state_dict(state_dict)
+        cls_autoencoder.eval()
+    
+    elif model_type == "custom_patch":
+        if not patch_autoencoder_path or not os.path.exists(patch_autoencoder_path):
+            raise ValueError("Valid patch autoencoder path must be provided for custom_patch model")
+        logger.info(f"Loading patch autoencoder from: {patch_autoencoder_path}")
+        patch_autoencoder = PatchAutoencoder(input_dim=1024, latent_dim=512).to(device)
+        state_dict = torch.load(patch_autoencoder_path, map_location=device)
+        if isinstance(state_dict, dict) and 'model_state_dict' in state_dict:
+            state_dict = state_dict['model_state_dict']
+        patch_autoencoder.load_state_dict(state_dict)
+        patch_autoencoder.eval()
+
+    return dino, cls_autoencoder, patch_autoencoder
 
 def get_image_transform() -> transforms.Compose:
     """Create the image transformation pipeline."""
@@ -78,7 +93,9 @@ def get_image_transform() -> transforms.Compose:
 def extract_query_features(
     image_path: str,
     dino: torch.nn.Module,
-    autoencoder: torch.nn.Module = None,
+    cls_autoencoder: torch.nn.Module = None,
+    patch_autoencoder: torch.nn.Module = None,
+    model_type: str = "dino",
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
 ) -> np.ndarray:
     """
@@ -87,7 +104,9 @@ def extract_query_features(
     Args:
         image_path: Path to the query image
         dino: DINO model
-        autoencoder: Optional autoencoder model
+        cls_autoencoder: Optional CLS autoencoder model
+        patch_autoencoder: Optional patch autoencoder model
+        model_type: Model type to use
         device: Device to run inference on
         
     Returns:
@@ -105,9 +124,26 @@ def extract_query_features(
         raise ValueError(f"Error processing query image: {e}")
 
     with torch.no_grad():
-        query_feature = dino(query_image).last_hidden_state[:, 0, :]
-        if autoencoder:
-            _, query_feature = autoencoder(query_feature)
+        outputs = dino(query_image)
+        
+        if model_type == "custom_cls" and cls_autoencoder:
+            cls_features = outputs.last_hidden_state[:, 0, :]
+            _, query_feature = cls_autoencoder(cls_features)
+        
+        elif model_type == "custom_patch" and patch_autoencoder:
+            patch_features = outputs.last_hidden_state[:, 1:, :]
+            patch_reconstructed = []
+            for patches in patch_features:
+                patch_latents = []
+                for patch in patches:
+                    _, latent = patch_autoencoder(patch.unsqueeze(0))
+                    patch_latents.append(latent)
+                patch_reconstructed.append(torch.mean(torch.cat(patch_latents), dim=0))
+            query_feature = torch.stack(patch_reconstructed)
+        
+        else:  # dino
+            query_feature = outputs.last_hidden_state[:, 0, :]
+        
         return query_feature.cpu().numpy()
 
 def query_index(
@@ -117,7 +153,8 @@ def query_index(
     top_k: int = 5,
     model_type: str = "dino",
     dino_model_name: str = "facebook/dinov2-large",
-    autoencoder_path: str = None,
+    cls_autoencoder_path: str = None,
+    patch_autoencoder_path: str = None,
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
 ) -> List[Tuple[str, float]]:
     """
@@ -128,9 +165,10 @@ def query_index(
         features_file: Path to the .npz file with features and image paths
         index_file: Path to the FAISS index file
         top_k: Number of nearest neighbors to return
-        model_type: Model type ("dino" or "custom")
+        model_type: Model type ("dino", "custom_cls", or "custom_patch")
         dino_model_name: Pre-trained DINO model name
-        autoencoder_path: Path to the trained autoencoder checkpoint
+        cls_autoencoder_path: Path to the CLS autoencoder checkpoint
+        patch_autoencoder_path: Path to the patch autoencoder checkpoint
         device: Device to run the model on
         
     Returns:
@@ -143,10 +181,14 @@ def query_index(
         raise FileNotFoundError(f"Index file not found: {index_file}")
 
     # Load models
-    dino, autoencoder = load_models(model_type, dino_model_name, autoencoder_path, device)
+    dino, cls_autoencoder, patch_autoencoder = load_models(
+        model_type, dino_model_name, cls_autoencoder_path, patch_autoencoder_path, device
+    )
 
     # Extract query features
-    query_feature = extract_query_features(query_image_path, dino, autoencoder, device)
+    query_feature = extract_query_features(
+        query_image_path, dino, cls_autoencoder, patch_autoencoder, model_type, device
+    )
 
     # Load FAISS index
     logger.info("Loading FAISS index...")
@@ -175,6 +217,26 @@ def query_index(
     
     return results
 
+def get_image_label(image_path: str, labels_dir: str) -> str:
+    """
+    Get label for an image by reading its corresponding label file.
+    
+    Args:
+        image_path: Path to image file (e.g., 'image_00001.jpg')
+        labels_dir: Directory containing label files
+    """
+    # Extract image number and create label filename
+    image_num = int(image_path.split('_')[-1].split('.')[0])
+    label_filename = f"image_{image_num-1:05d}.txt"
+    label_path = os.path.join(labels_dir, label_filename)
+    
+    try:
+        with open(label_path, 'r') as f:
+            return f.read().strip()
+    except Exception as e:
+        logger.error(f"Error reading label file {label_path}: {e}")
+        return None
+
 if __name__ == "__main__":
     import argparse
     
@@ -183,8 +245,11 @@ if __name__ == "__main__":
     parser.add_argument("--features_file", required=True, help="Path to features file")
     parser.add_argument("--index_file", required=True, help="Path to FAISS index")
     parser.add_argument("--top_k", type=int, default=5, help="Number of results to return")
-    parser.add_argument("--model_type", default="dino", choices=["dino", "custom"], help="Model type")
-    parser.add_argument("--autoencoder_path", help="Path to autoencoder checkpoint")
+    parser.add_argument("--model_type", default="dino", 
+                       choices=["dino", "custom_cls", "custom_patch"], help="Model type")
+    parser.add_argument("--cls_autoencoder_path", help="Path to CLS autoencoder checkpoint")
+    parser.add_argument("--patch_autoencoder_path", help="Path to patch autoencoder checkpoint")
+    parser.add_argument("--labels_dir", required=True, help="Directory containing image labels")
     
     args = parser.parse_args()
     
@@ -195,12 +260,18 @@ if __name__ == "__main__":
             index_file=args.index_file,
             top_k=args.top_k,
             model_type=args.model_type,
-            autoencoder_path=args.autoencoder_path
+            cls_autoencoder_path=args.cls_autoencoder_path,
+            patch_autoencoder_path=args.patch_autoencoder_path
         )
         
-        print(f"\nTop {len(results)} matches for {args.query_image}:")
+        # Get query image label
+        query_label = get_image_label(os.path.basename(args.query_image), args.labels_dir)
+        print(f"\nQuery image: {args.query_image} (Class: {query_label})")
+        print(f"\nTop {len(results)} matches:")
+        
         for i, (path, distance) in enumerate(results, 1):
-            print(f"{i}. {path} (Distance: {distance:.4f})")
+            retrieved_label = get_image_label(os.path.basename(path), args.labels_dir)
+            print(f"{i}. {path} (Class: {retrieved_label}, Distance: {distance:.4f})")
             
     except Exception as e:
         logger.error(f"Error during query: {e}")
