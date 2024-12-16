@@ -51,17 +51,6 @@ def train(config):
         annotation_file="data/coco/annotations/captions_train2017.json"
     )
 
-    dataset_size = len(train_loader)
-    subset_size = int(0.05 * dataset_size)
-    indices = list(range(dataset_size))
-
-    np.random.shuffle(indices)
-    subset_indices = indices[:subset_size]
-
-
-    #randomly sample 0.5
-
-
     # Optimizer and scheduler
     optimizer = optim.AdamW(
         list(autoencoder_cls.parameters()) + list(autoencoder_patch.parameters()),
@@ -84,9 +73,7 @@ def train(config):
         epoch_total_loss = 0  # Accumulator for total epoch loss
 
 
-        for i, (images, text) in tqdm(enumerate((train_loader))):
-            if i not in subset_indices:
-              continue
+        for images, text in tqdm(train_loader):
             images = images.to(device)
 
             # Extract CLS and patch tokens
