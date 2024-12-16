@@ -1,6 +1,6 @@
 # VisionFineTuneFusion: Efficient Vision-Language Alignment for Retrieval and Depth Estimation
 
-This project focuses on integrating DINO's structural embeddings with CLIP's semantic insights to enhance various vision tasks, demonstrating improved performance in **instance retrieval** and **depth estimation** with a more compact embedding dimension (512 vs. 768). Our approach introduces a novel framework that fine-tunes DINO embeddings using lightweight autoencoders while aligning them with CLIP embeddings to inject semantic information. The method is efficient, leveraging frozen pre-trained models (DINO and CLIP) and adding task-specific learning through reconstruction and alignment losses.
+This project ([paper here](paper.pdf)) focuses on integrating DINO's structural embeddings with CLIP's semantic insights to enhance various vision tasks, demonstrating improved performance in **instance retrieval** and **depth estimation** with a more compact embedding dimension (512 vs. 768). Our approach introduces a novel framework that fine-tunes DINO embeddings using lightweight autoencoders while aligning them with CLIP embeddings to inject semantic information. The method is efficient, leveraging frozen pre-trained models (DINO and CLIP) and adding task-specific learning through reconstruction and alignment losses.
 
 ## Approach
 
