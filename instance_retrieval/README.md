@@ -60,7 +60,28 @@ data/flowers/ ├── images/ # RGB images ├── labels.mat # Label metada
 
 Run the `extract_features.py` script to extract features from the dataset:
 ```bash
-python extract_features.py
+
+
+python3 instance_retrieval/extract_features.py \
+    --image_dir data/flowers/images \
+    --output_file instance_retrieval/features.npz \
+    --model_type dino
+
+For CLS autoencoder:
+python3 instance_retrieval/extract_features.py \
+    --image_dir data/flowers/images \
+    --output_file instance_retrieval/cls_features.npz \
+    --model_type custom_cls \
+    --cls_autoencoder_path instance_retrieval/cls_model.pth
+
+
+For Patch autoencoder:
+python3 instance_retrieval/extract_features.py \
+    --image_dir data/flowers/images \
+    --output_file instance_retrieval/patch_features.npz \
+    --model_type custom_patch \
+    --patch_autoencoder_path instance_retrieval/patch_model.pth
+
 ```
 
 **Key arguments**:
@@ -70,16 +91,6 @@ python extract_features.py
 - `autoencoder_path`: Path to trained autoencoder weights (only for `"custom"` model type).
 
 
-
-Example:
-```bash
-python extract_features.py
---image_dir data/flowers/images
---output_file instance_retrieval/features.npz
---model_type dino
-```
-
-python3 instance_retrieval/extract_features.py --image_dir data/flowers/images --output_file instance_retrieval/features.npz --model_type dino
 
 ---
 
@@ -96,11 +107,17 @@ python build_index.py
 
 Example:
 ```bash
-python build_index.py
---features_file instance_retrieval/features.npz
---index_file instance_retrieval/faiss_index.idx
+
+
 
 python3 instance_retrieval/build_index.py --features_file instance_retrieval/features.npz --index_file instance_retrieval/faiss_index.idx
+
+
+python3 instance_retrieval/build_index.py --features_file instance_retrieval/cls_features.npz --index_file instance_retrieval/cls_faiss_index.idx
+
+python3 instance_retrieval/build_index.py --features_file instance_retrieval/patches_features.npz --index_file instance_retrieval/patches_faiss_index.idx
+
+
 ```
 
 ---
@@ -120,19 +137,37 @@ python query_idnex.py
 - `autoencoder_path`: Path to trained autoencoder weights (only for `"custom"` model type).
 
 Example:
-```bash
-python query_index.py
---query_image_path data/flowers/images/image_00001.jpg
---features_file instance_retrieval/features.npz
---index_file instance_retrieval/faiss_index.idx
---model_type dino
-```
+
+
+
 
 python3 instance_retrieval/query_index.py \
-  --query_image data/flowers/images/image_00002.jpg \
-  --features_file instance_retrieval/features.npz \
-  --index_file instance_retrieval/faiss_index.idx \
-  --model_type dino
+    --query_image data/flowers/images/image_00001.jpg \
+    --features_file instance_retrieval/features.npz \
+    --index_file instance_retrieval/faiss_index.idx \
+    --labels_dir data/flowers/image_labels \
+    --model_type dino
+
+
+For CLS autoencoder:
+python3 instance_retrieval/query_index.py \
+    --query_image data/flowers/images/image_00900.jpg \
+    --features_file instance_retrieval/cls_features.npz \
+    --index_file instance_retrieval/cls_faiss_index.idx \
+    --labels_dir data/flowers/image_labels \
+    --model_type custom_cls \
+    --cls_autoencoder_path instance_retrieval/cls_model.pth
+
+
+For Patch autoencoder:
+python3 instance_retrieval/query_index.py \
+    --query_image data/flowers/images/image_00001.jpg \
+    --features_file instance_retrieval/patch_features.npz \
+    --index_file instance_retrieval/patch_faiss_index.idx \
+    --labels_dir data/flowers/image_labels \
+    --model_type custom_patch \
+    --patch_autoencoder_path instance_retrieval/patch_model.pth
+
 
 ---
 
@@ -144,14 +179,30 @@ Run the `metrics.py` functions to compute retrieval metrics:
 
 Example script to evaluate:
 ```bash
+
 python3 instance_retrieval/metrics.py \
   --index_file instance_retrieval/faiss_index.idx \
   --features_file instance_retrieval/features.npz \
+  --labels_dir data/flowers/image_labels \
   --top_k 100 \
-  --num_queries 50 \
-  --similarity_threshold 0.8 \
-  --output_file results/evaluation_results.json
+  --num_queries 100 \
+  --output_file results/instance_results.json
 
+python3 instance_retrieval/metrics.py \
+  --index_file instance_retrieval/cls_faiss_index.idx \
+  --features_file instance_retrieval/cls_features.npz \
+  --labels_dir data/flowers/image_labels \
+  --top_k 100 \
+  --num_queries 8000 \
+  --output_file results/cls_instance_results.json
+
+  python3 instance_retrieval/metrics.py \
+  --index_file instance_retrieval/patch_faiss_index.idx \
+  --features_file instance_retrieval/patch_features.npz \
+  --labels_dir data/flowers/image_labels \
+  --top_k 100 \
+  --num_queries 8000 \
+  --output_file results/patch_instance_results.json #everysingle image
 ---
 
 ## Metrics
@@ -175,3 +226,16 @@ The following metrics are calculated during evaluation:
 - [Oxford 102 Flowers Dataset](https://www.robots.ox.ac.uk/~vgg/data/flowers/102/)
 - [DiNOv2 GitHub Repository](https://github.com/facebookresearch/dinov2)
 - [FAISS Documentation](https://github.com/facebookresearch/faiss)
+
+COMPARE.PY:
+
+
+python3 instance_retrieval/compare.py \
+    --default_index instance_retrieval/faiss_index.idx \
+    --cls_index instance_retrieval/cls_faiss_index.idx \
+    --default_features instance_retrieval/features.npz \
+    --cls_features instance_retrieval/cls_features.npz \
+    --labels_dir data/flowers/image_labels \
+    --output_dir results/contrasting_pairs \
+    --k 10 \
+    --top_n 10
