@@ -28,7 +28,7 @@ from PIL import Image
 from tqdm import tqdm
 
 # Project imports
-from models import load_dino_model, Autoencoder  # Import from models/__init__.py
+from models import load_dino_model, CLSAutoencoder, PatchAutoencoder  # Import from models/__init__.py
 from utils import load_checkpoint, compute_cosine_similarity  # Import from utils/__init__.py
 
 logging.basicConfig(level=logging.INFO)
