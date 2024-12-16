@@ -1,26 +1,46 @@
-# VisionFineTuneFusion: Unifying Vision Models for Retrieval and Depth Estimation
+# VisionFineTuneFusion: Efficient Vision-Language Alignment for Retrieval and Depth Estimation
 
-This project focuses on integrating DINO's structural embeddings with CLIP's semantic insights to enhance various vision tasks. The approach includes:
+This project focuses on integrating DINO's structural embeddings with CLIP's semantic insights to enhance various vision tasks, demonstrating improved performance in **instance retrieval** and **depth estimation** with a more compact embedding dimension (512 vs. 768). Our approach introduces a novel framework that fine-tunes DINO embeddings using lightweight autoencoders while aligning them with CLIP embeddings to inject semantic information. The method is efficient, leveraging frozen pre-trained models (DINO and CLIP) and adding task-specific learning through reconstruction and alignment losses.
 
-- **Instance Retrieval**: Using DINO's class token (CLS) and patch embeddings, finetuned with CLIP's image-text embeddings through cosine similarity loss, to align structural and semantic information.
+## Approach
 
-- **Depth Estimation**: Training both a CLS-based and a patch-based autoencoder to predict depth maps, utilizing global features from CLS and localized details from patches.
+- **Two Autoencoders**: We train two autoencoders, one for DINO's class token (CLS) embedding and another for its patch embeddings. These autoencoders compress the embeddings while preserving reconstruction fidelity and semantic alignment.
+- **Alignment with CLIP**: During training, we align DINO's embeddings with CLIP's multimodal embeddings using cosine similarity loss. This alignment is applied to both the CLS and patch embeddings.
+- **Frozen Pretrained Models**: Both DINO and CLIP weights are frozen, ensuring that the training focuses on learning lightweight, task-specific embeddings.
 
-- **Segmentation**: Leveraging DINO's patch embeddings for pixel-level segmentation tasks, improving spatial resolution and feature precision.
-
-- **Zero-Shot Learning**: Employing CLIP's image and text embeddings to enable classification and task generalization beyond the training data.
-
-This project investigates a training pipeline that combines DINO's hierarchical representations with CLIP's multimodal semantics. The framework emphasizes alignment between structural precision and semantic contextualization, bridging gaps between self-supervised learning and multimodal applications.
 ## Tasks
 
 1. **Instance Retrieval**:
    - Retrieve images similar to a query image based on their visual features.
-   - Uses DiNO's feature extraction and FAISS for efficient indexing and retrieval.
+   - Uses DINO’s CLS and patch embeddings as input, fine-tuned with CLIP alignment.
+   - Efficient indexing and retrieval are implemented using FAISS.
 
 2. **Depth Estimation**:
    - Predict pixel-wise depth maps from RGB images.
-   - Uses DiNO features as input to a regression head for depth prediction.
+   - Uses DINO’s features as input to two separate autoencoders (CLS and patch-based).
+   - Outputs compressed, semantically-enriched embeddings used for regression tasks.
 
+## Training Pipeline
+
+1. **Embedding Extraction**:
+   - Pass the image through DINO to obtain its CLS and patch embeddings.
+   - Pass the image and corresponding text through CLIP to extract two global embeddings (image and text).
+   - Patch the image, upsample each patch, and pass through CLIP to obtain patch-wise embeddings.
+
+2. **Autoencoder Training**:
+   - Train the CLS autoencoder with reconstruction loss and a CLIP alignment loss using CLIP’s global embeddings.
+   - Train the patch autoencoder with reconstruction loss and alignment loss for each patch embedding with CLIP.
+
+3. **Loss Function**:
+   - The total loss combines reconstruction and alignment objectives:
+     ```
+     L_total = L_reconstruction^CLS + L_alignment^CLS + L_reconstruction^patch + L_alignment^patch
+     ```
+
+## Results
+
+- **Instance Retrieval**: Achieved higher retrieval accuracy with smaller embedding dimensions (512 vs. 768).
+- **Depth Estimation**: Improved depth mapping results while leveraging compressed embeddings, enhancing both global (CLS) and local (patch) predictions.
 ---
 
 ## Folder Structure
