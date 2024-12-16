@@ -52,6 +52,9 @@ data/depth/
 3. **Ensure Consistent Resolutions**:
 - Resize both RGB images and depth maps to the same resolution (e.g., 224x224).
 
+
+
+
 ---
 
 ## Usage
@@ -71,11 +74,42 @@ python train_depth.py
 
 Example:
 ```bash
+
+For DINO model:
+
 python3 depth_estimation/train_depth.py \
     --image_dir data/depth/images \
     --depth_dir data/depth/depth_maps \
-    --model_type dino
-```
+    --model_type dino \
+    --checkpoint_dir depth_estimation/checkpoints \
+    --epochs 10 \
+    --batch_size 8 \
+    --lr 0.03
+
+For custom_patch model 
+
+python3 depth_estimation/train_depth.py \
+    --image_dir data/depth/images \
+    --depth_dir data/depth/depth_maps \
+    --model_type custom_patch \
+    --patch_autoencoder_path depth_estimation/patch_model.pth \
+    --checkpoint_dir depth_estimation/checkpoints \
+    --epochs 10 \
+    --batch_size 8 \
+    --lr 0.03
+
+For custom_cls model:
+
+python3 depth_estimation/train_depth.py \
+    --image_dir data/depth/images \
+    --depth_dir data/depth/depth_maps \
+    --model_type custom_cls \
+    --cls_autoencoder_path depth_estimation/cls_model.pth \
+    --checkpoint_dir depth_estimation/checkpoints \
+    --epochs 10 \
+    --batch_size 8 \
+    --lr 0.03
+
 
 ---
 
@@ -94,17 +128,75 @@ python evaluate_depth.py
 
 Example:
 ```bash
+For DINO model:
+
 python3 depth_estimation/evaluate_depth.py \
     --image_dir data/depth/images \
     --depth_dir data/depth/depth_maps \
-    --checkpoint_path depth_estimation/checkpoints/best_model.pth \
+    --model_type dino \
+    --checkpoint_path depth_estimation/checkpoints/best_model_dino.pth \
     --save_predictions \
-    --results_file evaluation_results.json
+    --results_file results/dino_depth.json
+
+For custom_patch model:
+
+python3 depth_estimation/evaluate_depth.py \
+    --image_dir data/depth/images \
+    --depth_dir data/depth/depth_maps \
+    --model_type custom_patch \
+    --checkpoint_path depth_estimation/checkpoints/checkpoint_epoch_10.pth \
+    --patch_autoencoder_path depth_estimation/patch_model.pth \
+    --save_predictions \
+    --results_file results/patch_depth.json
+
+For custom_cls model:
+
+python3 depth_estimation/evaluate_depth.py \
+    --image_dir data/depth/images \
+    --depth_dir data/depth/depth_maps \
+    --model_type custom_cls \
+    --checkpoint_path depth_estimation/checkpoints/best_model.pth \
+    --cls_autoencoder_path depth_estimation/cls_model.pth \
+    --save_predictions \
+    --results_file results/cls_depth.json
+    
 ```
 ---
 
-### 3. Metrics
+Visualize.py:
 
-The following metrics are calculated during evaluation:
-- **Mean Absolute Error (MAE)**: Average absolute pixel-wise error between predicted and ground truth depth maps.
-- **Root Mean Squared Error (RMSE)**: Square root of the mean squared error between predicted and ground truth depth maps.
+python3 depth_estimation/visualize.py \
+    --image_path data/depth/images/00000.jpg \
+    --depth_dir data/depth/depth_maps \
+    --checkpoint_path depth_estimation/checkpoints/best_model.pth \
+    --model_type dino \
+    --output_path results/dino_depth_vis.png
+
+For CLS autoencoder:
+
+python3 depth_estimation/visualize.py \
+    --image_path data/depth/images/00005.jpg \
+    --depth_dir data/depth/depth_maps \
+    --checkpoint_path depth_estimation/checkpoints/best_model.pth \
+    --model_type custom_cls \
+    --cls_autoencoder_path depth_estimation/cls_model.pth \
+    --output_path results/cls_depth_vis.png
+
+For PatchAutoencoder:
+
+python3 depth_estimation/visualize.py \
+    --image_path data/depth/images/01000.jpg \
+    --depth_dir data/depth/depth_maps \
+    --checkpoint_path depth_estimation/checkpoints/best_model.pth \
+    --model_type custom_patch \
+    --patch_autoencoder_path depth_estimation/patch_model.pth \
+    --output_path results/patch_depth_vis.png
+
+
+
+
+
+
+
+
+
