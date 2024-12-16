@@ -1,6 +1,7 @@
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
+import numpy as np
 from models.autoencoder import Autoencoder, PatchAutoencoder
 from models.dino import load_dino_model, extract_cls_and_patches
 from models.clip import load_clip_model, get_clip_embeddings
@@ -13,20 +14,20 @@ import matplotlib.pyplot as plt
 import random
 
 
-def prepare_patches_for_clip(patches, target_size=(224, 224), device='cuda'):
-    batch_size, num_patches, patch_dim = patches.shape
+def prepare_patches_for_clip(images, target_size=(224, 224), device='cuda'):
+    batch_size = images.shape[0]
+    patch_size = 16
 
-    patches = patches.to(device)  # Ensure patches are on the correct device
-    patches = patches.reshape(-1, patch_dim)  # [batch_size * num_patches, patch_dim]
+    num_patches = 256
 
-    patch_images = patches.reshape(-1, 32, 32)  # Assuming patch_dim is 32x32
-    targ = 32
-    
-    patch_images = patch_images.unsqueeze(1).repeat(1, 3, 1, 1).to(device)  # [batch_size * num_patches, 3, 32, 32]
-    patch_images = torch.sigmoid(patch_images)
-    patch_images = patch_images.view(batch_size * num_patches, 3, *(targ, targ))
-    return patch_images
+    patches = F.unfold(images, kernel_size=(patch_size, patch_size), stride=patch_size)
 
+    patches = patches.reshape(batch_size, 3, 256, 14, 14) 
+
+    patches = patches.reshape(batch_size * 256, 3, 14, 14)   
+
+    upsampled_patches = F.interpolate(patches.view(-1, 3, 14, 14), size=(224, 224), mode='bilinear')
+    return upsampled_patches
 
 def train(config):
     debug = False
@@ -50,6 +51,17 @@ def train(config):
         annotation_file="data/coco/annotations/captions_train2017.json"
     )
 
+    dataset_size = len(train_loader)
+    subset_size = int(0.05 * dataset_size)
+    indices = list(range(dataset_size))
+
+    np.random.shuffle(indices)
+    subset_indices = indices[:subset_size]
+
+
+    #randomly sample 0.5
+
+
     # Optimizer and scheduler
     optimizer = optim.AdamW(
         list(autoencoder_cls.parameters()) + list(autoencoder_patch.parameters()),
@@ -71,7 +83,10 @@ def train(config):
         cnt = 0
         epoch_total_loss = 0  # Accumulator for total epoch loss
 
-        for images, text in tqdm(train_loader):
+
+        for i, (images, text) in tqdm(enumerate((train_loader))):
+            if i not in subset_indices:
+              continue
             images = images.to(device)
 
             # Extract CLS and patch tokens
@@ -94,7 +109,7 @@ def train(config):
 
             # Compute CLIP embeddings
             patch_image_embeds, _ = get_clip_embeddings(
-                clip, processor, prepare_patches_for_clip(patch_tokens, device=device), text, device=device
+                clip, processor, prepare_patches_for_clip(images, device=device), text, device=device
             )
 
             patch_image_embeds = patch_image_embeds.view(config['batch_size'], config['num_patches'], -1).to(device)
